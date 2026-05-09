@@ -111,6 +111,10 @@ def main(argv: list[str] | None = None) -> int:
 
     data = json.loads(Path(args.data).read_text(encoding="utf-8"))
     project = data.get("project") or data
+    if "budgets" not in project and project.get("budgetCategories"):
+        project["budgets"] = project["budgetCategories"]
+    if "activities" not in project and project.get("recentActivities"):
+        project["activities"] = project["recentActivities"]
     period_start = args.period_start or data.get("periodStart") or project.get("startDate") or ""
     period_end   = args.period_end   or data.get("periodEnd")   or project.get("endDate")   or ""
     draft        = args.draft or data.get("draft") or ""

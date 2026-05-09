@@ -733,6 +733,14 @@ def main(argv: list[str] | None = None) -> int:
     period_end   = args.period_end   or data.get("periodEnd")   or project.get("endDate")   or ""
     draft        = args.draft or data.get("draft") or ""
 
+    # Field-name reconciliation — Convex project-context uses
+    # budgetCategories / recentActivities; pptxgenjs schema uses budgets /
+    # activities. Accept either; the rest of this file reads the canonical names.
+    if "budgets" not in project and project.get("budgetCategories"):
+        project["budgets"] = project["budgetCategories"]
+    if "activities" not in project and project.get("recentActivities"):
+        project["activities"] = project["recentActivities"]
+
     funder_logo = fetch_image(project.get("funderLogoUrl", ""))
     gallery_imgs = [fetch_image((g or {}).get("url", "")) for g in (project.get("gallery") or [])[:4]]
 
