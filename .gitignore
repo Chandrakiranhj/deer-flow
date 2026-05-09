@@ -38,6 +38,13 @@ coverage/
 .deer-flow/
 .claude/
 skills/custom/*
+# VEPIP-specific custom skills are tracked
+!skills/custom/vepip
+!skills/custom/vepip/**
+!skills/custom/vepip-intake
+!skills/custom/vepip-intake/**
+!skills/custom/vepip-reports
+!skills/custom/vepip-reports/**
 logs/
 log/
 debug.log
