@@ -942,6 +942,13 @@ def replace_virtual_paths_in_command(command: str, thread_data: ThreadDataState 
     """
     result = command
 
+    def _quote_if_spaced(p: str) -> str:
+        """Wrap host paths with spaces in double quotes so shells (PowerShell,
+        bash, cmd) treat them as a single argument. Skip if already quoted."""
+        if " " in p and not (p.startswith('"') or p.startswith("'")):
+            return f'"{p}"'
+        return p
+
     # Replace skills paths
     skills_container = _get_skills_container_path()
     skills_host = _get_skills_host_path()
@@ -949,7 +956,7 @@ def replace_virtual_paths_in_command(command: str, thread_data: ThreadDataState 
         skills_pattern = re.compile(rf"{re.escape(skills_container)}(/[^\s\"';&|<>()]*)?")
 
         def replace_skills_match(match: re.Match) -> str:
-            return _resolve_skills_path(match.group(0))
+            return _quote_if_spaced(_resolve_skills_path(match.group(0)))
 
         result = skills_pattern.sub(replace_skills_match, result)
 
@@ -960,7 +967,7 @@ def replace_virtual_paths_in_command(command: str, thread_data: ThreadDataState 
         acp_pattern = re.compile(rf"{re.escape(_ACP_WORKSPACE_VIRTUAL_PATH)}(/[^\s\"';&|<>()]*)?")
 
         def replace_acp_match(match: re.Match, _tid: str | None = _thread_id) -> str:
-            return _resolve_acp_workspace_path(match.group(0), _tid)
+            return _quote_if_spaced(_resolve_acp_workspace_path(match.group(0), _tid))
 
         result = acp_pattern.sub(replace_acp_match, result)
 
@@ -971,11 +978,38 @@ def replace_virtual_paths_in_command(command: str, thread_data: ThreadDataState 
         pattern = re.compile(rf"{re.escape(VIRTUAL_PATH_PREFIX)}(/[^\s\"';&|<>()]*)?")
 
         def replace_user_data_match(match: re.Match) -> str:
-            return replace_virtual_path(match.group(0), thread_data)
+            return _quote_if_spaced(replace_virtual_path(match.group(0), thread_data))
 
         result = pattern.sub(replace_user_data_match, result)
 
     return result
+
+
+def _resolve_user_data_paths_in_content(content: str, thread_data: ThreadDataState | None) -> str:
+    """Rewrite /mnt/user-data/* references inside file content to host paths.
+
+    Used when writing scripts that the agent will later execute — without
+    this, a script that hardcodes ``"/mnt/user-data/outputs/foo.docx"`` in
+    a string literal would try to write to that literal path at runtime
+    instead of the resolved per-thread host directory.
+
+    Returns paths as forward-slash strings so they work cleanly inside
+    Python source / JSON files on Windows hosts (avoids backslash escapes).
+    """
+    if thread_data is None or VIRTUAL_PATH_PREFIX not in content:
+        return content
+
+    # Match /mnt/user-data/<rest> up to a non-path char (newline, quote,
+    # whitespace, shell metacharacter). Same boundary set as the command
+    # resolver so paths embedded in code stay intact.
+    pattern = re.compile(rf"{re.escape(VIRTUAL_PATH_PREFIX)}(/[^\s\"';&|<>()]*)?")
+
+    def _replace(match: re.Match) -> str:
+        resolved = replace_virtual_path(match.group(0), thread_data)
+        # Normalise to forward slashes for safe embedding in Python literals.
+        return resolved.replace("\\", "/")
+
+    return pattern.sub(_replace, content)
 
 
 def _apply_cwd_prefix(command: str, thread_data: ThreadDataState | None) -> str:
@@ -990,7 +1024,11 @@ def _apply_cwd_prefix(command: str, thread_data: ThreadDataState | None) -> str:
         otherwise the original command unchanged.
     """
     if thread_data and (workspace := thread_data.get("workspace_path")):
-        return f"cd {shlex.quote(workspace)} && {command}"
+        # Use `;` rather than `&&` so the command works under both bash and
+        # Windows PowerShell 5.1 — the latter rejects `&&` as a parser error.
+        # Tools/scripts that care about `cd` failing (rare, since the workspace
+        # path is validated and pre-created) should use absolute paths.
+        return f"cd {shlex.quote(workspace)} ; {command}"
     return command
 
 
@@ -1516,6 +1554,13 @@ def write_file_tool(
             if not _is_custom_mount_path(path):
                 path = _resolve_and_validate_user_data_path(path, thread_data)
             # Custom mount paths are resolved by LocalSandbox._resolve_path()
+            # Also translate any /mnt/user-data/* references inside the file
+            # content itself — e.g. a Python script that calls
+            #   doc.save("/mnt/user-data/outputs/foo.docx")
+            # would otherwise try to write to a literal /mnt/... path on the
+            # host, which doesn't exist on Windows. We rewrite those to the
+            # actual host paths so the script can run unchanged.
+            content = _resolve_user_data_paths_in_content(content, thread_data)
         with get_file_operation_lock(sandbox, path):
             sandbox.write_file(path, content, append)
         return "OK"
