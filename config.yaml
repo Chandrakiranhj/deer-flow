@@ -5,18 +5,12 @@ token_usage:
   enabled: false
 
 models:
-  # Default agent model: moonshot-v1-auto (auto-scales 8k/32k/128k context).
-  # Non-thinking — returns the OpenAI-standard `content` field directly, so
-  # langchain_openai + downstream tooling work without special handling.
-  # Thinking models like kimi-k2.6 / kimi-k2-thinking burn the output-token
-  # budget on hidden reasoning and frequently leave `content` empty.
-  - name: kimi
-    display_name: Kimi (moonshot-v1-auto)
-    use: langchain_openai:ChatOpenAI
-    model: moonshot-v1-auto
-    api_key: $MOONSHOT_API_KEY
-    base_url: https://api.moonshot.ai/v1
-    timeout: 120.0
+  - name: gemini-2.5-pro
+    display_name: Gemini 2.5 Pro
+    use: langchain_google_genai:ChatGoogleGenerativeAI
+    model: gemini-2.5-pro
+    gemini_api_key: $GOOGLE_AI_API_KEY
+    timeout: 600.0
     max_retries: 2
     max_tokens: 8192
     temperature: 0.5
