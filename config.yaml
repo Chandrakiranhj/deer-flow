@@ -1,0 +1,112 @@
+config_version: 8
+log_level: info
+
+token_usage:
+  enabled: false
+
+models:
+  # Default agent model: moonshot-v1-auto (auto-scales 8k/32k/128k context).
+  # Non-thinking — returns the OpenAI-standard `content` field directly, so
+  # langchain_openai + downstream tooling work without special handling.
+  # Thinking models like kimi-k2.6 / kimi-k2-thinking burn the output-token
+  # budget on hidden reasoning and frequently leave `content` empty.
+  - name: kimi
+    display_name: Kimi (moonshot-v1-auto)
+    use: langchain_openai:ChatOpenAI
+    model: moonshot-v1-auto
+    api_key: $MOONSHOT_API_KEY
+    base_url: https://api.moonshot.ai/v1
+    timeout: 120.0
+    max_retries: 2
+    max_tokens: 8192
+    temperature: 0.5
+
+tool_groups:
+  - name: web
+  - name: file:read
+  - name: file:write
+  - name: bash
+  - name: vepip
+
+tools:
+  - name: get_project_context
+    group: vepip
+    use: deerflow.community.vepip.tools:get_project_context_tool
+
+  - name: log_activity
+    group: vepip
+    use: deerflow.community.vepip.tools:log_activity_tool
+
+  - name: record_expense
+    group: vepip
+    use: deerflow.community.vepip.tools:record_expense_tool
+
+  - name: update_deliverable
+    group: vepip
+    use: deerflow.community.vepip.tools:update_deliverable_tool
+
+  - name: add_milestone
+    group: vepip
+    use: deerflow.community.vepip.tools:add_milestone_tool
+
+  - name: add_testimonial
+    group: vepip
+    use: deerflow.community.vepip.tools:add_testimonial_tool
+
+  - name: get_org_summary
+    group: vepip
+    use: deerflow.community.vepip.tools:get_org_summary_tool
+
+  - name: write_alert
+    group: vepip
+    use: deerflow.community.vepip.tools:write_alert_tool
+
+  - name: get_report_data
+    group: vepip
+    use: deerflow.community.vepip.tools:get_report_data_tool
+
+  - name: ls
+    group: file:read
+    use: deerflow.sandbox.tools:ls_tool
+
+  - name: read_file
+    group: file:read
+    use: deerflow.sandbox.tools:read_file_tool
+
+  - name: write_file
+    group: file:write
+    use: deerflow.sandbox.tools:write_file_tool
+
+  # Bash execution — required for the vepip-reports skill to run the
+  # generated Python build scripts. Local single-user deployment, so
+  # allow_host_bash is enabled below.
+  - name: bash
+    group: bash
+    use: deerflow.sandbox.tools:bash_tool
+
+tool_search:
+  enabled: false
+
+uploads:
+  max_files: 10
+  max_file_size: 52428800
+  max_total_size: 104857600
+  auto_convert_documents: false
+
+sandbox:
+  use: deerflow.sandbox.local:LocalSandboxProvider
+  allow_host_bash: true
+
+memory:
+  enabled: true
+  injection_enabled: true
+  debounce_seconds: 30
+  max_facts: 100
+  fact_confidence_threshold: 0.7
+  max_injection_tokens: 2000
+
+subagents:
+  enabled: false
+
+skills:
+  path: ../skills
