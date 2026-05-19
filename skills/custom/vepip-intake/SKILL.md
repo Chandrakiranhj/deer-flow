@@ -24,6 +24,15 @@ The JSON object MUST follow this schema. Use `null` for any field that is missin
   "endDate":      "YYYY-MM-DD",
   "states":       ["Karnataka", "Tamil Nadu"],
 
+  // Optional per-state weighting of the grant. Use when the proposal/MOU
+  // specifies different budget commitments per state. Fractions should sum
+  // to 1. Omit (or use []) when documents only say "operates in X and Y"
+  // without per-state numbers — the platform falls back to an equal split.
+  "stateAllocations": [
+    { "state": "Karnataka",  "fraction": 0.7 },
+    { "state": "Tamil Nadu", "fraction": 0.3 }
+  ],
+
   "deliverables": [
     {
       "title":       "Quantifiable commitment (e.g. Teachers Trained)",
@@ -64,6 +73,7 @@ The JSON object MUST follow this schema. Use `null` for any field that is missin
 5. **Reporting schedule defaults to quarterly** if not specified — derive Q1/Q2/Q3/Q4 windows from `startDate`/`endDate`.
 6. **Never guess.** If a value is not in the document, use `null` (or `[]` for missing list fields). Add an entry to `risksOrAmbiguities` describing what's missing.
 7. **Comprehensive extraction.** Capture every commitment, milestone, budget item, and reporting requirement found in the text — don't summarise away detail.
+8. **State allocations.** Only populate `stateAllocations` when the documents give concrete per-state numbers (e.g. "₹12L for Karnataka activities, ₹6L for Tamil Nadu", or a table that breaks budget down by state). If the documents only list operating states without numbers, leave `stateAllocations` as an empty array — the platform defaults to an equal split, which is the right behaviour when the documents don't pin it down further.
 
 ## Common Indian states (canonical spellings)
 

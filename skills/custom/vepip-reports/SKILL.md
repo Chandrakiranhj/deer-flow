@@ -33,9 +33,11 @@ Output files written to `/mnt/user-data/outputs/` are surfaced as download links
 
    | Format | Command |
    |---|---|
-   | PPTX | `python /mnt/skills/custom/vepip-reports/scripts/build_pptx.py --data /mnt/user-data/workspace/report_data.json --output /mnt/user-data/outputs/<filename>.pptx --report-type <quarterly\|full> --period-start <YYYY-MM-DD> --period-end <YYYY-MM-DD>` |
-   | DOCX | `python /mnt/skills/custom/vepip-reports/scripts/build_docx.py --data /mnt/user-data/workspace/report_data.json --output /mnt/user-data/outputs/<filename>.docx --report-type <quarterly\|full> --period-start <YYYY-MM-DD> --period-end <YYYY-MM-DD>` |
-   | PDF  | `python /mnt/skills/custom/vepip-reports/scripts/build_pdf.py --data /mnt/user-data/workspace/report_data.json --output /mnt/user-data/outputs/<filename>.pdf --report-type <quarterly\|full> --period-start <YYYY-MM-DD> --period-end <YYYY-MM-DD>` |
+   | PPTX | `python /mnt/skills/custom/vepip-reports/scripts/build_pptx.py --data /mnt/user-data/workspace/report_data.json --output /mnt/user-data/outputs/<filename>.pptx --report-type <quarterly\|full> --period-start <YYYY-MM-DD> --period-end <YYYY-MM-DD> --vibe <vibe-key>` |
+   | DOCX | `python /mnt/skills/custom/vepip-reports/scripts/build_docx.py --data /mnt/user-data/workspace/report_data.json --output /mnt/user-data/outputs/<filename>.docx --report-type <quarterly\|full> --period-start <YYYY-MM-DD> --period-end <YYYY-MM-DD> --vibe <vibe-key>` |
+   | PDF  | `python /mnt/skills/custom/vepip-reports/scripts/build_pdf.py --data /mnt/user-data/workspace/report_data.json --output /mnt/user-data/outputs/<filename>.pdf --report-type <quarterly\|full> --period-start <YYYY-MM-DD> --period-end <YYYY-MM-DD> --vibe <vibe-key>` |
+
+   `--vibe` accepts: `editorial-serif` (default — warm cream + gold, prose-heavy), `dark-premium` (numbers-led board pitch, ≤8 slides), `magazine-bold` (saffron + black, photo-led, ≤6 slides), `ocean-corporate` (deep blue, audit-friendly, data-led). All three formats honour the same vibe selection so a project's PPTX, DOCX and PDF read as one coherent document.
 
    The scripts auto-install `python-pptx` / `python-docx` / `reportlab` / `Pillow` on first run via `pip`. Stdout will end with `WROTE: <path> (<bytes>)` on success. Any other output ending with a Python traceback means the run failed — read the traceback, fix the data JSON (never the script), and re-run.
 
@@ -145,17 +147,45 @@ Always write to `/mnt/user-data/outputs/` so the VEPIP UI can serve the file via
 
 ## What the scripts produce (so you know what good looks like)
 
-**PPTX (9 slides, 16:9, 13.333" × 7.5"):**
-1. Cover — dark brown + braille texture, white info band, funder logo
-2. Project Overview — gold-bar summary + duration & grant cards
-3. Key Impact at a Glance — 2×2 metric grid (deliverables, budget, teachers, students)
-4. Deliverables — table with progress bars and status dots
-5. Field Activities — vertical gold-circle timeline + 2×2 photo grid
-6. Stories from the Field — large cream quote card + secondary quote
-7. Geographic Coverage — hero number + state grid + reach chips
-8. Budget & Utilisation — 4 stat cards + horizontal progress bars per category
-9. Way Forward — challenges + next steps + dark "Thank You" panel with braille
+**PPTX (16:9, 13.333" × 7.5", up to 10 slides — manifest-driven, fully editable):**
 
-**DOCX:** branded cover, executive summary, deliverable table (dark brown header), activities bullet list, 3-up impact tiles, budget table, testimonials in italic blockquotes, way-forward section.
+**Architecture.** The PPTX builder uses a three-stage pipeline that produces real editable PowerPoint shapes, not rasterized image slides:
 
-**PDF (A4):** same content as DOCX rendered through reportlab with the brand palette and Times-based headings.
+1. **Python composer** — builds one HTML document containing N stacked 1920×1080 slide sections, using the bundled `html-ppt` skill's design tokens (Inter, Playfair Display, real CSS gradients, real grids, real SVG charts).
+2. **Headless Chrome via puppeteer-core** — loads the deck HTML, waits for webfonts to settle so text metrics are correct.
+3. **dom-to-pptx** — walks each section's DOM, reads `getComputedStyle()`/`getBoundingClientRect()` in pixel space, and emits **native editable PowerPoint shapes** (text boxes, vector shapes, gradients, embedded fonts) through pptxgenjs. SVGs are preserved as PowerPoint vectors (`svgAsVector: true`).
+
+The result: open the .pptx in PowerPoint and click any text — it's a real editable text box with the correct font, color, and position. Charts stay crisp at any zoom because they're vectors, not pixels.
+
+**Dependencies the runtime needs:**
+- Python: `python-pptx` + `Pillow` (auto-installed via `_bootstrap.ensure`).
+- Node 18+ on PATH or at `VEPIP_NODE`. Packages `dom-to-pptx` and `puppeteer-core` must be installed at the repo root (`npm install dom-to-pptx puppeteer-core`). The Python script auto-detects the nearest `node_modules` that contains them.
+- A Chromium-class browser on PATH (`google-chrome`, `chromium`, or `microsoft-edge`). The builder probes the obvious Windows/macOS/Linux install paths; set `VEPIP_CHROME=<path>` to override. `puppeteer-core` does NOT bundle Chrome — we use the system browser.
+- The `html-ppt` skill present at the sibling `public/html-ppt/` directory (it ships the 36 themes, base.css, fonts.css).
+
+**Slide manifest — what gets emitted:**
+
+The manifest picks slides based on data quality AND the selected vibe's structural preferences (prose-loving vs number-led vs photo-led). A sparse project gets a tight 4-5 slide deck; a rich project gets up to 10. No placeholder slides — if the data isn't there, the slide isn't there.
+
+1. **Cover** — always. Left accent rail, eyebrow + period + huge auto-sized project title, funder + grant + states anchored to bottom.
+2. **Project Overview** — emitted only if `narrative.overview` or `summary` ≥ N chars (N=80 for prose vibes, 180 for number-led vibes). No "This report summarises progress…" boilerplate.
+3. **Key Impact** — emitted if any of deliverables / budget / teachers / students has real numbers. Hero card with mega numeral + three supporting cards.
+4. **Deliverables** — emitted if `deliverables.length ≥ 1`. Table with HTML progress bars and percent labels.
+5. **Field Activities** — emitted if `activities.length ≥ 1`. Vertical timeline + 2×2 photo grid (Pillow-cropped to 16:10) when gallery photos exist.
+6. **Stories from the Field** — emitted only if a testimonial ≥ N chars exists (N=40 for quote-led vibes, 100 for number-led). Large serif italic pull-quote + secondary quote.
+7. **Geographic Coverage** — emitted only if `states.length ≥ 2`. Hero state count + 2-col state grid + 4-metric chip row.
+8. **Budget & Utilisation** — emitted if `approvedBudget > 0`. **Real SVG doughnut chart** (CSS-themable, crisp at any zoom) + financial-card column + budget-breakdown bars per category.
+9. **Way Forward** — emitted only if `narrative.challenges` or `narrative.way_forward` exists. Two-column challenges/next-steps cards.
+10. **Closing** — always. Big serif italic "Thank you" + project name + funder line + brand mark.
+
+**Vibe → html-ppt theme mapping** (drives palette, typography, web fonts):
+- `editorial-serif` → `editorial-serif.css` (warm cream + gold serif)
+- `dark-premium` → `tokyo-night.css` (deep navy + blue accent, bold sans)
+- `magazine-bold` → `magazine-bold.css` (saffron + black, ultra-bold)
+- `ocean-corporate` → `corporate-clean.css` (slate + deep blue, restrained)
+
+Each vibe also has structural knobs (`slide_count_cap`, `prefers_prose`, `prefers_quotes`, `prefers_charts`, `prefers_photos`) that tune the manifest. Same project data → 4 distinctly-shaped decks.
+
+**DOCX:** vibe-driven palette + typography, branded cover, gated sections (executive summary, deliverable table with vibe-coloured header, activities bullet list, 3-up impact tiles, budget table, testimonials in italic blockquotes, challenges/next-steps). Same content-gating as the PPTX manifest — no "No X recorded" placeholders, no "To be documented in consultation with the field team" filler.
+
+**PDF (A4):** same content as DOCX rendered through reportlab with the vibe palette. Serif vibes (`editorial-serif`) use Times-based headings; sans vibes (`dark-premium`, `magazine-bold`, `ocean-corporate`) use Helvetica-based headings. Same gating rules.

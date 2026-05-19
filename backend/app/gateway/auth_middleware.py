@@ -27,6 +27,8 @@ _PUBLIC_PATH_PREFIXES: tuple[str, ...] = (
     "/docs",
     "/redoc",
     "/openapi.json",
+    # VEPIP non-agentic exec endpoints — gated by VEPIP_INTERNAL_SECRET in-router.
+    "/api/exec/",
 )
 
 # Exact auth paths that are public (login/register/status check).

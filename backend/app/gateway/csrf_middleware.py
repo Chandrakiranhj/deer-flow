@@ -40,6 +40,11 @@ def should_check_csrf(request: Request) -> bool:
     # Exempt /api/v1/auth/me endpoint
     if path == "/api/v1/auth/me":
         return False
+    # VEPIP non-agentic exec endpoints authenticate via shared bearer secret,
+    # not browser-session cookies, so the Double-Submit-Cookie pattern does
+    # not apply.
+    if request.url.path.startswith("/api/exec/"):
+        return False
     return True
 
 

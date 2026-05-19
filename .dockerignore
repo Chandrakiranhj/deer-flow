@@ -53,19 +53,19 @@ assets/
 tests/
 *.log
 
-# Exclude directories not needed in Docker context
-# Frontend build only needs frontend/
-# Backend build only needs backend/
+# Exclude directories not needed in Docker context.
+# IMPORTANT: skills/ MUST be included — DeerFlow loads vepip + vepip-intake +
+# vepip-reports from there at runtime, so do NOT exclude it.
 scripts/
 logs/
 docker/
-skills/
 frontend/.next
 frontend/node_modules
+frontend/
 backend/.venv
 backend/htmlcov
 backend/.coverage
+backend/.deer-flow
 *.md
 !README.md
-!frontend/README.md
 !backend/README.md

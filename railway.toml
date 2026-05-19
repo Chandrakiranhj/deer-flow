@@ -1,0 +1,16 @@
+# Railway service config. Railway auto-detects the Dockerfile so this file
+# is just for build/runtime tuning — everything inside [deploy] is optional
+# but improves cold-start behaviour and gives the platform a health probe.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Restart the service if uvicorn crashes (instead of leaving it dead).
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+# Railway hits this URL to confirm the service is healthy before routing
+# traffic. /health is exposed by the gateway router at app boot.
+healthcheckPath = "/health"
+healthcheckTimeout = 30

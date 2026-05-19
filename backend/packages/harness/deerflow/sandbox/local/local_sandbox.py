@@ -234,7 +234,12 @@ class LocalSandbox(Sandbox):
 
         def replace_match(match: re.Match) -> str:
             matched_path = match.group(0)
-            return self._resolve_path(matched_path)
+            resolved = self._resolve_path(matched_path)
+            # Quote paths with spaces so PowerShell/cmd/bash treat them as
+            # one argument rather than splitting on the space.
+            if " " in resolved and not (resolved.startswith('"') or resolved.startswith("'")):
+                return f'"{resolved}"'
+            return resolved
 
         return pattern.sub(replace_match, command)
 
