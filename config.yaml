@@ -5,10 +5,10 @@ token_usage:
   enabled: false
 
 models:
-  - name: gemini-2.5-pro
-    display_name: Gemini 2.5 Pro
+  - name: gemini-2.5-flash
+    display_name: Gemini 2.5 Flash
     use: langchain_google_genai:ChatGoogleGenerativeAI
-    model: gemini-2.5-pro
+    model: gemini-2.5-flash
     gemini_api_key: $GOOGLE_AI_API_KEY
     timeout: 600.0
     max_retries: 2
